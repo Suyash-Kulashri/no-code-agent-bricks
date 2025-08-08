@@ -112,33 +112,49 @@ def create_agent_endpoint(client: WorkspaceClient, agent_name: str, model_name: 
 def create_databricks_model_endpoint(client: WorkspaceClient, agent_name: str, 
                                    model_name: str, system_prompt: str, 
                                    vector_indexes: List[str] = None) -> str:
-    """Create a serving endpoint for Databricks foundation models"""
+    """Create a serving endpoint for Databricks foundation models or workspace models"""
     try:
         endpoint_name = f"{agent_name.replace(' ', '_').lower()}_endpoint"
         add_status_message(f"🚀 Creating Databricks serving endpoint: {endpoint_name}")
         
-        # Check if endpoint already exists
         if _endpoint_exists(client, endpoint_name):
             add_status_message(f"⚠️ Endpoint {endpoint_name} already exists", False)
             return ""
         
-        # Create endpoint configuration for Databricks foundation model
+        is_foundation_model = model_name.startswith("databricks-")
+        entity_internal_name = f"{agent_name}_entity"
+
+        if is_foundation_model:
+            served_entities = [{
+                "entity_name": entity_internal_name,  # required for API
+                "foundation_model_name": model_name,  # tells it to use Databricks-hosted model
+                "workload_size": "Small",
+                "scale_to_zero_enabled": True,
+                "environment_vars": {
+                    "SYSTEM_PROMPT": system_prompt[:1000],
+                    "VECTOR_INDEXES": json.dumps(vector_indexes or [])
+                }
+            }]
+        else:
+            served_entities = [{
+                "entity_name": model_name,            # name in registry
+                "entity_version": "1",                # registry version
+                "workload_size": "Small",
+                "scale_to_zero_enabled": True,
+                "environment_vars": {
+                    "SYSTEM_PROMPT": system_prompt[:1000],
+                    "VECTOR_INDEXES": json.dumps(vector_indexes or [])
+                }
+            }]
+            entity_internal_name = model_name.split("/")[-1]
+        
         endpoint_config = {
             "name": endpoint_name,
             "config": {
-                "served_entities": [{
-                    "entity_name": model_name,
-                    "entity_version": "1",
-                    "workload_size": "Small",
-                    "scale_to_zero_enabled": True,
-                    "environment_vars": {
-                        "SYSTEM_PROMPT": system_prompt[:1000],  # Limit length
-                        "VECTOR_INDEXES": json.dumps(vector_indexes or [])
-                    }
-                }],
+                "served_entities": served_entities,
                 "traffic_config": {
                     "routes": [{
-                        "served_model_name": model_name.split("/")[-1],  # Use model name without prefix
+                        "served_model_name": entity_internal_name,
                         "traffic_percentage": 100
                     }]
                 }
@@ -146,10 +162,11 @@ def create_databricks_model_endpoint(client: WorkspaceClient, agent_name: str,
         }
         
         return _create_endpoint(client, endpoint_config, agent_name, model_name, system_prompt, vector_indexes, False)
-        
+    
     except Exception as e:
         add_status_message(f"❌ Error creating Databricks endpoint: {str(e)}", False)
         return ""
+
 
 def create_external_model_endpoint(client: WorkspaceClient, agent_name: str, 
                                  model_name: str, system_prompt: str, api_key: str) -> str:
