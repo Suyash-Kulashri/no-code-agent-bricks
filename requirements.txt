@@ -1,0 +1,15 @@
+streamlit==1.39.0
+databricks-sdk==0.34.0
+requests==2.32.3
+PyPDF2==3.0.1
+databricks-vectorsearch==0.40.0
+dotenv
+openai
+boto3
+PyMuPDF>=1.23.0
+sentence-transformers>=2.2.0
+faiss-cpu>=1.7.0
+databricks-sql-connector>=2.9.0
+pypdf 
+databricks-connect>=14.3
+requests
